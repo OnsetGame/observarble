@@ -68,6 +68,7 @@ Generated Code
 
 
 3. Set custom getter or setter
+------------------------------
 
 .. code-block:: nim
 
@@ -120,6 +121,7 @@ Generated Code
 
 
 4. Inherits observarble type
+----------------------------
 
 .. code-block:: nim
 
@@ -144,6 +146,7 @@ Generated Code
 
 
 5. Set set of observarble fields
+--------------------------------
 
 .. code-block:: nim
 
