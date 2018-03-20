@@ -5,105 +5,125 @@ import logging
 
 
 type 
-    ObserverId = int
+    ObserverId* = int
     Observarble* = ref object of RootObj
-        ## Represents observarble object
         listeners: TableRef[ObserverId, seq[ObserverHandler]]
         noNotify: bool
-    ObserverHandler* = proc(o: Observarble)
-
-proc notifyOn*(o: Observarble): bool = 
-    ## Get notify status
-    not o.noNotify
-proc `notifyOn=`*(o: Observarble, notifyOn: bool) = 
-    ## Set notify status
-    o.noNotify = not notifyOn
+    ObserverHandler* = proc()
 
 when defined(js):
     {.emit:"""
-    var _nimx_observerIdCounter = 0;
+        var _nimx_observerIdCounter = 0;
     """.}
 
-    proc getObserverId(rawId: RootRef): ObserverId =
+    proc getObserverId*(rawId: RootRef): ObserverId =
         {.emit: """
             if (`rawId`.__nimx_observer_id === undefined) {
                 `rawId`.__nimx_observer_id = --_nimx_observerIdCounter;
             }
             `result` = `rawId`.__nimx_observer_id;
         """.}
-    template getObserverID(rawId: ref): ObserverId = getObserverId(cast[RootRef](rawId))
+    template getObserverId*(rawId: ref): ObserverId = getObserverId(cast[RootRef](rawId))
 else:
-    template getObserverID(rawId: ref): ObserverId = cast[int](rawId)
+    template getObserverId*(rawId: ref): ObserverId = cast[int](rawId)
 
+template notifyOnGet(T): untyped =
+    proc notifyOn*(o: T): bool = 
+        not (o.noNotify)
+        
+template notifyOnSet(T): untyped =
+    proc `notifyOn=`*(o: T, notifyOn: bool) =
+        o.noNotify = not (notifyOn)
 
-proc subscribe*(o: Observarble, r: ref, cb: ObserverHandler) =
-    ## Subscribe 
+template subscribe(T): untyped =
+    proc subscribe*(o: T, r: ref, cb: ObserverHandler) =
+        if o.listeners.isNil:
+            o.listeners = newTable[ObserverId, seq[ObserverHandler]]()
 
-    if o.listeners.isNil:
-        o.listeners = newTable[ObserverId, seq[ObserverHandler]]()
+        let id = getObserverId(r)
+        var listeners = o.listeners.getOrDefault(id)
+        if listeners.isNil:
+            listeners = @[]
+        listeners.add(cb)
+        o.listeners[id] = listeners
 
-    let id = getObserverId(r)
-    var listeners = o.listeners.getOrDefault(id)
-    if listeners.isNil:
-        listeners = @[]
-    listeners.add(cb)
-    o.listeners[id] = listeners
+template subscribeSeq(T): untyped =
+    proc subscribe*(oo: openarray[T], r: ref, cb: ObserverHandler) =
+        for o in oo:
+            o.subscribe(r, cb)
 
-proc subscribe*(oo: openarray[Observarble], r: ref, cb: ObserverHandler) =
-    ## Subscribe to each object in sequence
+template unsubscribe(T): untyped =
+    proc unsubscribe*(o: T, r: ref) =
+        if o.listeners.isNil:
+            return
+        o.listeners.del(getObserverId(r))
 
-    for o in oo:
-        o.subscribe(r, cb)
+template unsubscribeSeq(T): untyped =
+    proc unsubscribe*(oo: openarray[T], r: ref) =
+        for o in oo:
+            o.unsubscribe(r)
 
-proc unsubscribe*(o: Observarble, r: ref) =
-    if o.listeners.isNil:
-        return
-    o.listeners.del(getObserverId(r))
+template unsubscribeProc(T): untyped =
+    proc unsubscribe*(o: T, r: ref, cb: ObserverHandler) =
+        if o.listeners.isNil:
+            return
+        let id = getObserverId(r)
+        var listeners = o.listeners.getOrDefault(id)
+        if listeners.isNil:
+            return
+        for c in cb:
+            let index = listeners.find(c)
+            if index > -1:
+                listeners.del(index)
 
-proc unsubscribe*(oo: openarray[Observarble], r: ref) =
-    for o in oo:
-        o.unsubscribe(r)
+template unsubscribeProcSeq(T): untyped =
+    proc unsubscribe*(oo: openarray[T], r: ref, cb: ObserverHandler) =
+        for o in oo:
+            o.unsubscribe(r, cb)
 
-proc unsubscribe*(o: Observarble, r: ref, cb: ObserverHandler) =
-    if o.listeners.isNil:
-        return
-    let id = getObserverId(r)
-    var listeners = o.listeners.getOrDefault(id)
-    if listeners.isNil:
-        return
-    for c in cb:
-        let index = listeners.find(c)
-        if index > -1:
-            listeners.del(index)
+template notify(T): untyped =
+    proc notify*(o: T) =
+        if o.noNotify:
+            return
 
-proc unsubscribe*(oo: openarray[Observarble], r: ref, cb: ObserverHandler) =
-    for o in oo:
-        o.unsubscribe(r, cb)
+        for cbs in o.listeners.values:
+            if cbs.isNil:
+                continue
+            for cb in cbs:
+                cb()
 
-proc notify*(o: Observarble) =
-    if o.noNotify:
-        return
-
-    for cbs in o.listeners.values:
-        if cbs.isNil:
-            continue
-        for cb in cbs:
-            cb(o)
-
-template update*(o: Observarble, x: untyped): untyped =
+template update*[T](o: T, x: untyped): untyped =
     let notify = o.notifyOn
     o.notifyOn = false
-
+    
     x
-
+    
     o.notifyOn = notify
     if notify:
         o.notify()
 
+proc getObservarbleMethods(x: NimNode): NimNode =
+    result = nnkStmtList.newTree(
+        getAst(notifyOnGet(x)),
+        getAst(notifyOnSet(x)),
+        getAst(subscribe(x)),
+        getAst(subscribeSeq(x)),
+        getAst(unsubscribe(x)),
+        getAst(unsubscribeSeq(x)),
+        getAst(unsubscribeProc(x)),
+        getAst(unsubscribeProcSeq(x)),
+        getAst(notify(x))
+    )
+
+macro observarbleMethods(x: untyped): untyped =
+    result = getObservarbleMethods(x)
+
+observarbleMethods(Observarble)
+
 template genType(T, TT): untyped =
     type T* = ref object of TT
 
-proc toObservarble(x: NimNode, y: NimNode): NimNode =
+proc toObservarble(x: NimNode, y: NimNode, isChild: bool): NimNode =
     var T: NimNode
     var TT: NimNode
     
@@ -126,6 +146,27 @@ proc toObservarble(x: NimNode, y: NimNode): NimNode =
 
     var fields = nnkRecList.newTree()
     var procs = nnkStmtList.newTree()
+
+    if not isChild:
+        fields.add(
+            nnkIdentDefs.newTree(
+                newIdentNode("listeners"),
+                nnkBracketExpr.newTree(
+                    newIdentNode("TableRef"),
+                    newIdentNode("ObserverId"),
+                    nnkBracketExpr.newTree(
+                        newIdentNode("seq"),
+                        newIdentNode("ObserverHandler")
+                    )
+                ),
+                newEmptyNode()
+            ),
+            nnkIdentDefs.newTree(
+                newIdentNode("noNotify"),
+                newIdentNode("bool"),
+                newEmptyNode()
+            )
+        )
 
     var propWhitelist: seq[string]
     var startInd = 0
@@ -162,13 +203,14 @@ proc toObservarble(x: NimNode, y: NimNode): NimNode =
         
         disabled = propWhitelist.len > 0 and $name.ident notin propWhitelist
         let pname = ident("p_" & $name)
+        let notify = ident("notify")
         
         var getter = quote:
             proc `name`(o: `T`): `ntype` = o.`pname`
         var setter = quote:
             proc `name`(o: `T`, `name`: `ntype`) = 
                 o.`pname` = `name`
-                o.notify()
+                o.`notify`()
         setter[0] = nnkAccQuoted.newTree(ident($setter[0] & "="))
 
         if isPublic:
@@ -212,8 +254,26 @@ proc toObservarble(x: NimNode, y: NimNode): NimNode =
         procs
     )
 
+proc addObservarbleMethods(x: var NimNode) =
+    var T = x[0][0][0]
+    if T.kind == nnkPostfix:
+        T = T[1]
+
+    x = nnkStmtList.newTree(
+        x[0],
+        getObservarbleMethods(T),
+        x[1]
+    )
+
 macro observarble*(x: untyped, y: untyped = nil): untyped =
-    result = toObservarble(x, y)
+    result = toObservarble(x, y, true)
     
+    when defined(debugObservarble):
+        echo "\ngen finished \n ", repr(result)
+
+macro asObservarble*(x: untyped, y: untyped = nil): untyped =
+    result = toObservarble(x, y, false)
+    result.addObservarbleMethods()
+
     when defined(debugObservarble):
         echo "\ngen finished \n ", repr(result)

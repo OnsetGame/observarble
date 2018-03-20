@@ -1,4 +1,4 @@
-import observarble
+import observarble, tables
 
 
 observarble MyObservarble1:
@@ -25,7 +25,7 @@ observarble MyObserverable4:
             result = o.field1 & o.field2
     }
     field3* string {
-        getter: proc(o: MyObserverable4, v: string) =
+        setter: proc(o: MyObserverable4, v: string) =
             o.field1 = v
             o.field2 = v
             o.notify()
@@ -44,3 +44,14 @@ observarble MyObservarble6:
     field3* int
     field4* int
     field5* int
+
+
+type CustomType = ref object of RootObj
+    field1: string
+
+asObservarble MyObservarble7 of CustomType:
+    {field3}
+
+    field2 string
+    field3 string
+    field4 string
