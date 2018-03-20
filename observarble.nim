@@ -1,7 +1,4 @@
-## My module
-
 import tables, macros
-import logging
 
 
 type 
