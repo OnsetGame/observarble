@@ -1,3 +1,5 @@
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FOnsetGame%2Fobservarble.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2FOnsetGame%2Fobservarble?ref=badge_shield)
+
 ===========
 observarble
 ===========
@@ -343,3 +345,6 @@ Macros
     macro observarble*(x: untyped, y: untyped = nil): untyped
 
     macro asObservarble*(x: untyped, y: untyped = nil): untyped
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2FOnsetGame%2Fobservarble.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2FOnsetGame%2Fobservarble?ref=badge_large)
