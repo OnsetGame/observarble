@@ -80,7 +80,7 @@ template unsubscribeProcSeq(T): untyped =
 
 template notify(T): untyped =
     proc notify*(o: T) =
-        if o.noNotify:
+        if o.noNotify or o.listeners.isNil:
             return
 
         for cbs in o.listeners.values:
@@ -172,7 +172,7 @@ proc toObservarble(x: NimNode, y: NimNode, isChild: bool): NimNode =
         propWhitelist = @[]
         for n in y[0]:
             n.expectKind(nnkIdent)
-            propWhitelist.add($n.ident)
+            propWhitelist.add($n)
 
     for i in startInd ..< y.len:
         var node = y[i]
@@ -181,6 +181,9 @@ proc toObservarble(x: NimNode, y: NimNode, isChild: bool): NimNode =
         var isPublic: bool
         var settings: NimNode
         var disabled = false
+
+        if node.kind == nnkCommentStmt:
+            continue
 
         if node.kind == nnkCommand and node[1].kind == nnkTableConstr:
             settings = node[1]
@@ -198,7 +201,7 @@ proc toObservarble(x: NimNode, y: NimNode, isChild: bool): NimNode =
         else:
             error "Unexpected AST\n" & treeRepr(node)
         
-        disabled = propWhitelist.len > 0 and $name.ident notin propWhitelist
+        disabled = propWhitelist.len > 0 and $name notin propWhitelist
         let pname = ident("p_" & $name)
         let notify = ident("notify")
         
