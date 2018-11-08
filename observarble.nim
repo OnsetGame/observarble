@@ -84,8 +84,6 @@ template notify(T): untyped =
             return
 
         for cbs in o.listeners.values:
-            if cbs.isNil:
-                continue
             for cb in cbs:
                 cb()
 
