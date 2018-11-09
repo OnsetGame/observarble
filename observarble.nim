@@ -39,8 +39,6 @@ template subscribe(T): untyped =
 
         let id = getObserverId(r)
         var listeners = o.listeners.getOrDefault(id)
-        if listeners.isNil:
-            listeners = @[]
         listeners.add(cb)
         o.listeners[id] = listeners
 
